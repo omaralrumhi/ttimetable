@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الجدول المدرسي الذكي</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">الجدول الدراسي</div>
+            <ul id="full-schedule-list">
+                </ul>
+        </aside>
+
+        <main class="main-display">
+            <header class="header-info">
+                <div id="miladi-date" class="date-badge-right">جاري التحميل...</div>
+
+                <div class="time-center-wrapper">
+                    <div id="digital-clock">00:00:00</div>
+                </div>
+
+                <div id="countdown-container">
+                    <div class="countdown-label">الوقت المتبقي لنهاية الحصة</div>
+                    <div id="countdown-timer">00:00</div>
+                </div>
+            </header>
+
+            <section class="session-area">
+                <h1 id="session-title">جاري التحميل...</h1>
+                <div id="teachers-list">
+                    </div>
+            </section>
+
+            <footer class="news-ticker">
+                <div class="ticker-title">ملاحظات</div>
+                <div class="ticker-content">
+                    <div id="ticker-text">مرحباً بكم في مدرستنا...</div>
+                </div>
+            </footer>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
