@@ -1,0 +1,151 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800;900&display=swap');
+
+:root {
+    --bg-core: #050a14;
+    --neon-cyan: #00f7ff;
+    --neon-pink: #ff0099;
+    --neon-gold: #ffcc00;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: url('msbg3.jpg') center/cover no-repeat fixed #000;
+    background-blend-mode: multiply;
+    color: #fff;
+    font-family: 'Cairo', sans-serif;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    direction: rtl;
+}
+
+/* استخدام vw و vh يضمن بقاء النسب ثابتة مهما حدث زووم */
+.container { 
+    display: flex; 
+    height: 100vh; 
+    width: 100vw; 
+    padding: 1vh 1vw; 
+    gap: 1vw; 
+}
+
+/* السايد بار يأخذ عرضاً بناءً على عرض الشاشة الكلي */
+.sidebar {
+    width: 22vw; 
+    min-width: 220px; /* ضمان عدم صغره جداً عند الزووم أوت */
+    border-radius: 2vh;
+    background: rgba(10, 18, 35, 0.6);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 247, 255, 0.2);
+    padding: 1vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header { font-size: 1.8vw; font-weight: 900; color: var(--neon-cyan); text-align: center; margin-bottom: 1vh; }
+
+.sidebar-top-headers { display: flex; border-bottom: 1px solid rgba(0,247,255,0.2); padding-bottom: 0.5vh; margin-bottom: 1vh; }
+.header-label-main { flex: 0 0 35%; font-size: 1vw; }
+.header-label-times { flex: 0 0 65%; display: flex; justify-content: space-around; font-size: 1.1vw; }
+
+.label-from { color: #00ffaa; font-weight: 900; }
+.label-to { color: #ff5e00; font-weight: 900; }
+
+#full-schedule-list { flex: 1; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+
+.sidebar-item {
+    background: rgba(255,255,255,0.03);
+    padding: 0.5vh 0.5vw;
+    border-radius: 1vh;
+    border-right: 0.5vw solid #444;
+}
+
+.active-session { background: rgba(0, 247, 255, 0.15) !important; border-right-color: var(--neon-pink) !important; }
+
+.sidebar-time-container { display: flex; gap: 0.3vw; margin-top: 0.3vh; }
+.time-box { flex: 1; background: #000; text-align: center; color: var(--neon-cyan); border-radius: 0.5vh; font-size: 1.1vw; font-family: monospace; }
+
+/* العرض الرئيسي */
+.main-display { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.header-info {
+    height: 18vh;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid rgba(0, 247, 255, 0.2);
+    margin-bottom: 1vh;
+}
+
+#digital-clock { font-size: 6vw; font-weight: 900; color: var(--neon-cyan); text-shadow: 0 0 20px rgba(0,247,255,0.5); }
+#countdown-timer { font-size: 5vw; color: var(--neon-gold); font-weight: 900; }
+
+.session-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#session-title { font-size: 2.5vw; text-align: center; font-weight: 900; margin-bottom: 1vh; }
+
+/* شبكة الكروت: تستخدم vw لضمان تناسق الحجم مع الزووم */
+#teachers-list {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13vw, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 1vh;
+    padding-bottom: 1vh;
+}
+
+.class-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 1.5vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5vh;
+    overflow: hidden; /* يمنع الاسم من الخروج قبل تصغيره */
+}
+
+.class-name { color: var(--neon-cyan); font-weight: 800; font-size: 1.2vw; }
+.teacher-name { font-weight: 900; color: #fff; text-align: center; width: 100%; white-space: nowrap; }
+
+/* شريط الأخبار: حل مشكلة الاختفاء */
+.news-ticker {
+    height: 7vh;
+    background: #000;
+    border: 2px solid var(--neon-gold);
+    border-radius: 3.5vh;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.ticker-title { 
+    background: var(--neon-gold); 
+    color: #000; 
+    height: 100%; 
+    padding: 0 1.5vw; 
+    display: flex; 
+    align-items: center; 
+    font-weight: 900; 
+    font-size: 1.2vw; 
+    z-index: 5; 
+}
+
+.ticker-content { flex: 1; height: 100%; position: relative; }
+
+#ticker-text {
+    position: absolute;
+    white-space: nowrap;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5vw;
+    font-weight: 800;
+    will-change: transform;
+    animation: scroll-news 30s linear infinite;
+}
+
+@keyframes scroll-news {
+    from { right: -100%; }
+    to { right: 100%; }
+}
