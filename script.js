@@ -158,4 +158,9 @@ function openFullscreen() {
     } else if (elem.msRequestFullscreen) { /* IE11 */
         elem.msRequestFullscreen();
     }
+
 }
+// عند النقر في أي مكان على الشاشة، ادخل وضع ملء الشاشة
+document.addEventListener('click', () => {
+    openFullscreen();
+});
