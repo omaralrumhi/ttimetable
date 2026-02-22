@@ -1,6 +1,6 @@
 /**
- * نظام الجدول المدرسي الذكي - النسخة النهائية الموحدة 2026
- * ميزة الربط الذكي: البحث بالاسم لتفادي إزاحة الحصص بسبب "الفسحة"
+ * نظام الجدول المدرسي الذكي - النسخة المصححة
+ * تم حل مشكلة الإزاحة في يوم الأحد (تغيير i-1 إلى i)
  */
 
 const sheetUrls = {
@@ -12,106 +12,93 @@ const sheetUrls = {
     "العبارات": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=1453340959&single=true&output=csv"
 };
 
-// --- 1. الوظيفة الرئيسية لبدء النظام ---
 async function initSystem() {
     const days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
     const now = new Date();
     const dayName = days[now.getDay()];
 
     if (dayName === "الجمعة" || dayName === "السبت") {
-        showWeekendMode();
-        return;
+        document.getElementById('session-title').innerText = "عطلة نهاية أسبوع سعيدة";
+        document.getElementById('teachers-list').innerHTML = "";
+        document.getElementById('countdown-timer').innerText = "00:00";
+        document.getElementById('full-schedule-list').innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon-cyan);'>لا يوجد حصص اليوم</div>";
+        updateTickerOnly(); 
+        return; 
     }
 
+    const cacheBuster = "&t=" + new Date().getTime();
+
     try {
-        const cacheBuster = "&t=" + new Date().getTime();
-        
-        // جلب جدول الأحد دائماً (لأنه المرجع للأوقات وأسماء الحصص)
         const resSun = await fetch(sheetUrls["الأحد"] + cacheBuster);
         const rowsSun = parseCSV(await resSun.text());
-
         let rowsToday = null;
         if (dayName !== "الأحد" && sheetUrls[dayName]) {
             const resDay = await fetch(sheetUrls[dayName] + cacheBuster);
             rowsToday = parseCSV(await resDay.text());
         }
+        let phraseText = "مرحباً بكم في مدرستنا";
+        try {
+            const resPhrases = await fetch(sheetUrls["العبارات"] + cacheBuster);
+            const rowsP = parseCSV(await resPhrases.text());
+            phraseText = rowsP.slice(1).map(r => r[0]).filter(t => t).join("  •  ") + "  •  ";
+            phraseText += phraseText; 
+        } catch(e){}
+        updateUI(rowsSun, rowsToday, dayName, phraseText);
+    } catch (e) { console.error(e); }
+}
 
-        updateUI(rowsSun, rowsToday, dayName);
-        updateTicker();
-    } catch (e) { console.error("Error initSystem:", e); }
+async function updateTickerOnly() {
+    try {
+        const resPhrases = await fetch(sheetUrls["العبارات"] + "&t=" + new Date().getTime());
+        const rowsP = parseCSV(await resPhrases.text());
+        let phraseText = rowsP.slice(1).map(r => r[0]).filter(t => t).join("  •  ") + "  •  ";
+        document.getElementById('ticker-text').innerText = phraseText + phraseText;
+    } catch(e){}
 }
 
 function parseCSV(t) { return t.split('\n').map(r => r.split(',').map(c => c.replace(/"/g, '').trim())); }
 
-// --- 2. تحديث الواجهة والتعامل مع الحصص والفسحة ---
-function updateUI(rowsSun, rowsToday, dayName) {
+function updateUI(rowsSun, rowsToday, dayName, phraseText) {
     const now = new Date();
     const curTime = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+    document.getElementById('ticker-text').innerText = phraseText;
 
-    // استخراج أسماء الفصول (من السطر الثاني في شيت الأحد)
     const classNames = rowsSun[1].slice(5).filter(n => n);
     let sidebarHtml = `<div class="sidebar-top-headers"><span class="header-label-main">الحصة</span><div class="header-label-times"><span class="label-from">من</span><span class="label-to">إلى</span></div></div>`;
 
     let currentData = null;
-
-    // نبدأ من السطر الثالث في شيت الأحد (الحصص)
     for (let i = 2; i < rowsSun.length; i++) {
         const sRow = rowsSun[i];
         if (!sRow[0]) continue;
-
         const isActive = (curTime >= sRow[1] && curTime < sRow[2]);
         sidebarHtml += `<div class="sidebar-item ${isActive ? 'active-session' : ''}"><div>${sRow[0]}</div><div class="sidebar-time-container"><div class="time-box">${sRow[1]}</div><div class="time-box">${sRow[2]}</div></div></div>`;
         
         if (isActive) {
-            const lessonName = sRow[0].trim();
-            // التحقق إذا كانت الحصة الحالية هي "فسحة"
-            const isBreak = lessonName.includes("فسحة") || lessonName.includes("استراحة") || lessonName.includes("بريك");
-
-            if (isBreak) {
-                currentData = {
-                    title: lessonName,
-                    end: sRow[2],
-                    html: `<div class="break-message">☕ وقت استراحة للطلاب</div>`
-                };
-            } else {
-                // البحث عن المعلمين بالاسم (لحل مشكلة عدم وجود الفسحة في شيت المعلمين)
-                let teachers = [];
-                let sourceRow = null;
-
-                if (dayName === "الأحد" || !rowsToday) {
-                    sourceRow = sRow; // في يوم الأحد البيانات في نفس السطر
-                } else {
-                    // البحث في شيت اليوم عن سطر يبدأ بنفس اسم الحصة
-                    sourceRow = rowsToday.find(r => r[0] && r[0].trim() === lessonName);
-                }
-
-                if (sourceRow) {
-                    // الأحد يبدأ المعلمون من العمود 6، الأيام الأخرى من العمود 2
-                    teachers = (dayName === "الأحد" || !rowsToday) ? sourceRow.slice(5) : sourceRow.slice(1);
-                }
-
-                let cards = "";
-                classNames.forEach((n, idx) => {
-                    cards += `<div class="class-card"><div class="class-name">${n}</div><div class="teacher-name"><div class="name-wrapper">${teachers[idx] || "---"}</div></div></div>`;
-                });
-                currentData = { title: "الحصة الآن: " + lessonName, end: sRow[2], html: cards };
-            }
+            let teachers = [];
+            // التعديل هنا: استخدام i بدلاً من i-1 لضبط الإزاحة
+            let sourceRow = (dayName === "الأحد" || !rowsToday) ? rowsSun[i] : rowsToday[i];
+            
+            teachers = sourceRow ? ((dayName === "الأحد" || !rowsToday) ? sourceRow.slice(5) : sourceRow.slice(1)) : [];
+            let cards = "";
+            classNames.forEach((n, idx) => {
+                cards += `<div class="class-card"><div class="class-name">${n}</div><div class="teacher-name"><div class="name-wrapper">${teachers[idx] || "---"}</div></div></div>`;
+            });
+            currentData = { title: "الحصة الآن: " + sRow[0], end: sRow[2], html: cards };
         }
     }
-
     document.getElementById('full-schedule-list').innerHTML = sidebarHtml;
-    
     if (currentData) {
         document.getElementById('session-title').innerText = currentData.title;
         document.getElementById('teachers-list').innerHTML = currentData.html;
-        setTimeout(adjustIndividualCardFonts, 100);
+        setTimeout(adjustIndividualCardFonts, 50);
         startCountdown(currentData.end);
     } else {
-        showNoSessionMode();
+        document.getElementById('session-title').innerText = "استراحة / نهاية اليوم";
+        document.getElementById('teachers-list').innerHTML = "";
+        document.getElementById('countdown-timer').innerText = "00:00";
     }
 }
 
-// --- 3. وظيفة الخط الذكية (تمنع انكسار الكلمات وتصغر الخط) ---
 function adjustIndividualCardFonts() {
     const cards = document.querySelectorAll('.class-card');
     cards.forEach(card => {
@@ -124,15 +111,13 @@ function adjustIndividualCardFonts() {
         wrapper.style.wordBreak = "keep-all";
         wrapper.style.display = "inline-block";
 
-        // تقليل الخط إذا خرج عن حدود الكرت
-        while (wrapper.scrollWidth > (card.clientWidth - 15) && fontSize > 0.5) {
+        while (wrapper.scrollWidth > card.clientWidth - 15 && fontSize > 0.5) {
             fontSize -= 0.05;
             wrapper.style.fontSize = fontSize + "vw";
         }
     });
 }
 
-// --- 4. المؤقت التنازلي ونظام الوقت ---
 function startCountdown(end) {
     if (window.cdInt) clearInterval(window.cdInt);
     const [h, m] = end.split(':').map(Number);
@@ -150,41 +135,28 @@ function startCountdown(end) {
 
 setInterval(() => {
     const now = new Date();
-    let h = now.getHours();
-    const ampm = h >= 12 ? 'م' : 'ص';
-    h = h % 12 || 12;
-    document.getElementById('digital-clock').innerHTML = `${h}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')} <span style="font-size:0.5em;">${ampm}</span>`;
+    let hours = now.getHours();
+    const ampm = hours >= 12 ? 'م' : 'ص';
+    hours = hours % 12 || 12;
+    const timeString = `${hours}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')} <span style="font-size: 0.5em;">${ampm}</span>`;
+    document.getElementById('digital-clock').innerHTML = timeString;
     const dateEl = document.getElementById('miladi-date');
     if(dateEl) dateEl.innerText = now.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + " م";
 }, 1000);
 
-// --- 5. وظائف مساعدة ---
-async function updateTicker() {
-    try {
-        const res = await fetch(sheetUrls["العبارات"] + "&t=" + new Date().getTime());
-        const rows = parseCSV(await res.text());
-        let phrase = rows.slice(1).map(r => r[0]).filter(t => t).join("  •  ") + "  •  ";
-        document.getElementById('ticker-text').innerText = phrase + phrase;
-    } catch(e){}
-}
-
-function showWeekendMode() {
-    document.getElementById('session-title').innerText = "عطلة نهاية أسبوع سعيدة";
-    document.getElementById('teachers-list').innerHTML = "";
-    document.getElementById('full-schedule-list').innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon-cyan);'>لا يوجد حصص اليوم</div>";
-    updateTicker();
-}
-
-function showNoSessionMode() {
-    document.getElementById('session-title').innerText = "استراحة / نهاية اليوم";
-    document.getElementById('teachers-list').innerHTML = "";
-    document.getElementById('countdown-timer').innerText = "00:00";
-}
-
+window.addEventListener('resize', adjustIndividualCardFonts);
 window.onload = initSystem;
-setInterval(initSystem, 300000); // تحديث البيانات كل 5 دقائق
+setInterval(initSystem, 300000);
+
+function openFullscreen() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+    }
+}
 
 document.addEventListener('click', () => {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) elem.requestFullscreen();
+    openFullscreen();
 });
