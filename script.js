@@ -1,6 +1,6 @@
 /**
- * نظام الجدول المدرسي الذكي - النسخة النهائية
- * الميزات: منع كسر الكلمات، نظام 12 ساعة، دعم الزووم، والتعامل مع أيام العطلة
+ * نظام الجدول المدرسي الذكي - النسخة المصححة
+ * تم حل مشكلة الإزاحة في يوم الأحد (تغيير i-1 إلى i)
  */
 
 const sheetUrls = {
@@ -17,14 +17,11 @@ async function initSystem() {
     const now = new Date();
     const dayName = days[now.getDay()];
 
-    // --- إضافة شرط العطلة هنا ---
     if (dayName === "الجمعة" || dayName === "السبت") {
         document.getElementById('session-title').innerText = "عطلة نهاية أسبوع سعيدة";
         document.getElementById('teachers-list').innerHTML = "";
         document.getElementById('countdown-timer').innerText = "00:00";
         document.getElementById('full-schedule-list').innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon-cyan);'>لا يوجد حصص اليوم</div>";
-        
-        // جلب العبارات فقط لتحديث شريط الأخبار حتى في الإجازة
         updateTickerOnly(); 
         return; 
     }
@@ -50,7 +47,6 @@ async function initSystem() {
     } catch (e) { console.error(e); }
 }
 
-// دالة لتحديث شريط الأخبار فقط أيام العطلة
 async function updateTickerOnly() {
     try {
         const resPhrases = await fetch(sheetUrls["العبارات"] + "&t=" + new Date().getTime());
@@ -76,15 +72,18 @@ function updateUI(rowsSun, rowsToday, dayName, phraseText) {
         if (!sRow[0]) continue;
         const isActive = (curTime >= sRow[1] && curTime < sRow[2]);
         sidebarHtml += `<div class="sidebar-item ${isActive ? 'active-session' : ''}"><div>${sRow[0]}</div><div class="sidebar-time-container"><div class="time-box">${sRow[1]}</div><div class="time-box">${sRow[2]}</div></div></div>`;
+        
         if (isActive) {
             let teachers = [];
-            let sourceRow = (dayName === "الأحد" || !rowsToday) ? rowsSun[i-1] : rowsToday[i-1];
+            // التعديل هنا: استخدام i بدلاً من i-1 لضبط الإزاحة
+            let sourceRow = (dayName === "الأحد" || !rowsToday) ? rowsSun[i] : rowsToday[i];
+            
             teachers = sourceRow ? ((dayName === "الأحد" || !rowsToday) ? sourceRow.slice(5) : sourceRow.slice(1)) : [];
             let cards = "";
             classNames.forEach((n, idx) => {
                 cards += `<div class="class-card"><div class="class-name">${n}</div><div class="teacher-name"><div class="name-wrapper">${teachers[idx] || "---"}</div></div></div>`;
             });
-            currentData = { title: "الحصة الأن: " + sRow[0], end: sRow[2], html: cards };
+            currentData = { title: "الحصة الآن: " + sRow[0], end: sRow[2], html: cards };
         }
     }
     document.getElementById('full-schedule-list').innerHTML = sidebarHtml;
@@ -150,17 +149,14 @@ window.onload = initSystem;
 setInterval(initSystem, 300000);
 
 function openFullscreen() {
-    const elem = document.documentElement; // استهداف الصفحة كاملة
+    const elem = document.documentElement;
     if (elem.requestFullscreen) {
         elem.requestFullscreen();
-    } else if (elem.webkitRequestFullscreen) { /* Safari */
+    } else if (elem.webkitRequestFullscreen) {
         elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) { /* IE11 */
-        elem.msRequestFullscreen();
     }
-
 }
-// عند النقر في أي مكان على الشاشة، ادخل وضع ملء الشاشة
+
 document.addEventListener('click', () => {
     openFullscreen();
 });
