@@ -1,190 +1,240 @@
-/**
- * نظام الجدول المدرسي الذكي - النسخة النهائية الموحدة 2026
- * ميزة الربط الذكي: البحث بالاسم لتفادي إزاحة الحصص بسبب "الفسحة"
- */
-
-const sheetUrls = {
-    "الأحد": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=0&single=true&output=csv",
-    "الإثنين": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=387606236&single=true&output=csv", 
-    "الثلاثاء": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=2132518963&single=true&output=csv",
-    "الأربعاء": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=1914161473&single=true&output=csv",
-    "الخميس": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=1287360203&single=true&output=csv",
-    "العبارات": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcHAJak0bVPCbVvk2OWUs84l8YrXOqhBWVUSrgyHRVjqd_lJ30DzQKuemvziO0_zgA7lb9V0pLGKno/pub?gid=1453340959&single=true&output=csv"
-};
-
-// --- 1. الوظيفة الرئيسية لبدء النظام ---
-async function initSystem() {
-    const days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-    const now = new Date();
-    const dayName = days[now.getDay()];
-
-    if (dayName === "الجمعة" || dayName === "السبت") {
-        showWeekendMode();
-        return;
+<style>
+    /* --- المتغيرات الأساسية للألوان --- */
+    :root {
+        --bg-dark: #0a0b10;
+        --sidebar-bg: #151921;
+        --neon-cyan: #00f7ff;
+        --neon-purple: #9d00ff;
+        --text-white: #ffffff;
+        --card-bg: rgba(255, 255, 255, 0.05);
+        --accent-red: #ff0055;
     }
 
-    try {
-        const cacheBuster = "&t=" + new Date().getTime();
-        
-        // جلب جدول الأحد دائماً (لأنه المرجع للأوقات وأسماء الحصص)
-        const resSun = await fetch(sheetUrls["الأحد"] + cacheBuster);
-        const rowsSun = parseCSV(await resSun.text());
-
-        let rowsToday = null;
-        if (dayName !== "الأحد" && sheetUrls[dayName]) {
-            const resDay = await fetch(sheetUrls[dayName] + cacheBuster);
-            rowsToday = parseCSV(await resDay.text());
-        }
-
-        updateUI(rowsSun, rowsToday, dayName);
-        updateTicker();
-    } catch (e) { console.error("Error initSystem:", e); }
-}
-
-function parseCSV(t) { return t.split('\n').map(r => r.split(',').map(c => c.replace(/"/g, '').trim())); }
-
-// --- 2. تحديث الواجهة والتعامل مع الحصص والفسحة ---
-function updateUI(rowsSun, rowsToday, dayName) {
-    const now = new Date();
-    const curTime = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
-
-    // استخراج أسماء الفصول (من السطر الثاني في شيت الأحد)
-    const classNames = rowsSun[1].slice(5).filter(n => n);
-    let sidebarHtml = `<div class="sidebar-top-headers"><span class="header-label-main">الحصة</span><div class="header-label-times"><span class="label-from">من</span><span class="label-to">إلى</span></div></div>`;
-
-    let currentData = null;
-
-    // نبدأ من السطر الثالث في شيت الأحد (الحصص)
-    for (let i = 2; i < rowsSun.length; i++) {
-        const sRow = rowsSun[i];
-        if (!sRow[0]) continue;
-
-        const isActive = (curTime >= sRow[1] && curTime < sRow[2]);
-        sidebarHtml += `<div class="sidebar-item ${isActive ? 'active-session' : ''}"><div>${sRow[0]}</div><div class="sidebar-time-container"><div class="time-box">${sRow[1]}</div><div class="time-box">${sRow[2]}</div></div></div>`;
-        
-        if (isActive) {
-            const lessonName = sRow[0].trim();
-            // التحقق إذا كانت الحصة الحالية هي "فسحة"
-            const isBreak = lessonName.includes("فسحة") || lessonName.includes("استراحة") || lessonName.includes("بريك");
-
-            if (isBreak) {
-                currentData = {
-                    title: lessonName,
-                    end: sRow[2],
-                    html: `<div class="break-message">☕ وقت استراحة للطلاب</div>`
-                };
-            } else {
-                // البحث عن المعلمين بالاسم (لحل مشكلة عدم وجود الفسحة في شيت المعلمين)
-                let teachers = [];
-                let sourceRow = null;
-
-                if (dayName === "الأحد" || !rowsToday) {
-                    sourceRow = sRow; // في يوم الأحد البيانات في نفس السطر
-                } else {
-                    // البحث في شيت اليوم عن سطر يبدأ بنفس اسم الحصة
-                    sourceRow = rowsToday.find(r => r[0] && r[0].trim() === lessonName);
-                }
-
-                if (sourceRow) {
-                    // الأحد يبدأ المعلمون من العمود 6، الأيام الأخرى من العمود 2
-                    teachers = (dayName === "الأحد" || !rowsToday) ? sourceRow.slice(5) : sourceRow.slice(1);
-                }
-
-                let cards = "";
-                classNames.forEach((n, idx) => {
-                    cards += `<div class="class-card"><div class="class-name">${n}</div><div class="teacher-name"><div class="name-wrapper">${teachers[idx] || "---"}</div></div></div>`;
-                });
-                currentData = { title: "الحصة الآن: " + lessonName, end: sRow[2], html: cards };
-            }
-        }
+    /* --- الإعدادات العامة --- */
+    body, html {
+        margin: 0; padding: 0;
+        width: 100%; height: 100%;
+        background-color: var(--bg-dark);
+        color: var(--text-white);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow: hidden; /* لمنع ظهور أشرطة التمرير */
     }
 
-    document.getElementById('full-schedule-list').innerHTML = sidebarHtml;
-    
-    if (currentData) {
-        document.getElementById('session-title').innerText = currentData.title;
-        document.getElementById('teachers-list').innerHTML = currentData.html;
-        setTimeout(adjustIndividualCardFonts, 100);
-        startCountdown(currentData.end);
-    } else {
-        showNoSessionMode();
+    .container {
+        display: flex;
+        width: 100vw;
+        height: 100vh;
+        direction: rtl; /* التأكد من الاتجاه من اليمين لليسار */
     }
-}
 
-// --- 3. وظيفة الخط الذكية (تمنع انكسار الكلمات وتصغر الخط) ---
-function adjustIndividualCardFonts() {
-    const cards = document.querySelectorAll('.class-card');
-    cards.forEach(card => {
-        const wrapper = card.querySelector('.name-wrapper');
-        if (!wrapper) return;
+    /* --- القائمة الجانبية (Sidebar) --- */
+    .sidebar {
+        width: 22%;
+        background: var(--sidebar-bg);
+        border-left: 2px solid var(--neon-cyan);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+        z-index: 10;
+    }
 
-        let fontSize = 2.0; 
-        wrapper.style.fontSize = fontSize + "vw";
-        wrapper.style.whiteSpace = "nowrap"; 
-        wrapper.style.wordBreak = "keep-all";
-        wrapper.style.display = "inline-block";
+    .sidebar-header {
+        padding: 20px;
+        font-size: 1.5rem;
+        text-align: center;
+        background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: bold;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
 
-        // تقليل الخط إذا خرج عن حدود الكرت
-        while (wrapper.scrollWidth > (card.clientWidth - 15) && fontSize > 0.5) {
-            fontSize -= 0.05;
-            wrapper.style.fontSize = fontSize + "vw";
-        }
-    });
-}
+    .sidebar-top-headers {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 20px;
+        font-size: 0.8rem;
+        color: #666;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
 
-// --- 4. المؤقت التنازلي ونظام الوقت ---
-function startCountdown(end) {
-    if (window.cdInt) clearInterval(window.cdInt);
-    const [h, m] = end.split(':').map(Number);
-    window.cdInt = setInterval(() => {
-        const now = new Date(); const target = new Date(); target.setHours(h, m, 0);
-        const diff = target - now;
-        if (diff <= 0) { clearInterval(window.cdInt); initSystem(); }
-        else {
-            const min = Math.floor(diff / 60000); 
-            const sec = Math.floor((diff % 60000) / 1000);
-            document.getElementById('countdown-timer').innerText = `${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
-        }
-    }, 1000);
-}
+    .sidebar-item {
+        padding: 12px 15px;
+        margin: 5px 10px;
+        border-radius: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255,255,255,0.02);
+        transition: all 0.3s ease;
+    }
 
-setInterval(() => {
-    const now = new Date();
-    let h = now.getHours();
-    const ampm = h >= 12 ? 'م' : 'ص';
-    h = h % 12 || 12;
-    document.getElementById('digital-clock').innerHTML = `${h}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')} <span style="font-size:0.5em;">${ampm}</span>`;
-    const dateEl = document.getElementById('miladi-date');
-    if(dateEl) dateEl.innerText = now.toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + " م";
-}, 1000);
+    .active-session {
+        background: rgba(0, 247, 255, 0.15);
+        border: 1px solid var(--neon-cyan);
+        box-shadow: 0 0 15px rgba(0, 247, 255, 0.2);
+        transform: scale(1.02);
+    }
 
-// --- 5. وظائف مساعدة ---
-async function updateTicker() {
-    try {
-        const res = await fetch(sheetUrls["العبارات"] + "&t=" + new Date().getTime());
-        const rows = parseCSV(await res.text());
-        let phrase = rows.slice(1).map(r => r[0]).filter(t => t).join("  •  ") + "  •  ";
-        document.getElementById('ticker-text').innerText = phrase + phrase;
-    } catch(e){}
-}
+    .time-box {
+        color: var(--neon-cyan);
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.9rem;
+    }
 
-function showWeekendMode() {
-    document.getElementById('session-title').innerText = "عطلة نهاية أسبوع سعيدة";
-    document.getElementById('teachers-list').innerHTML = "";
-    document.getElementById('full-schedule-list').innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon-cyan);'>لا يوجد حصص اليوم</div>";
-    updateTicker();
-}
+    /* --- المنطقة الرئيسية (Main Display) --- */
+    .main-display {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 25px;
+        position: relative;
+        background: radial-gradient(circle at top left, rgba(0, 247, 255, 0.03), transparent);
+    }
 
-function showNoSessionMode() {
-    document.getElementById('session-title').innerText = "استراحة / نهاية اليوم";
-    document.getElementById('teachers-list').innerHTML = "";
-    document.getElementById('countdown-timer').innerText = "00:00";
-}
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+    }
 
-window.onload = initSystem;
-setInterval(initSystem, 300000); // تحديث البيانات كل 5 دقائق
+    #digital-clock {
+        font-size: 3.5rem;
+        font-weight: bold;
+        text-shadow: 0 0 20px var(--neon-cyan);
+        line-height: 1;
+    }
 
-document.addEventListener('click', () => {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) elem.requestFullscreen();
-});
+    .countdown-box {
+        text-align: center;
+        background: rgba(157, 0, 255, 0.1);
+        padding: 15px 30px;
+        border-radius: 20px;
+        border: 1px solid var(--neon-purple);
+        box-shadow: inset 0 0 15px rgba(157, 0, 255, 0.1);
+    }
+
+    #countdown-timer {
+        font-size: 3rem;
+        color: var(--accent-red);
+        font-weight: bold;
+        display: block;
+        font-family: monospace;
+    }
+
+    /* --- شبكة الفصول (Teachers Grid) --- */
+    .session-area {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    #session-title {
+        font-size: 2.2rem;
+        color: var(--neon-cyan);
+        margin-bottom: 20px;
+        font-weight: 300;
+    }
+
+    #teachers-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 15px;
+        align-content: start;
+    }
+
+    .class-card {
+        background: var(--card-bg);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
+        padding: 15px;
+        text-align: center;
+        backdrop-filter: blur(10px);
+        transition: transform 0.3s ease;
+    }
+
+    .class-name {
+        font-size: 1rem;
+        color: #888;
+        margin-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 5px;
+    }
+
+    .teacher-name {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .name-wrapper {
+        font-weight: bold;
+        color: #fff;
+        white-space: nowrap;
+    }
+
+    /* --- ستايل الفسحة (Break Message) --- */
+    .break-msg-container {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 80px 20px;
+        font-size: 4vw;
+        color: var(--neon-cyan);
+        background: rgba(0, 247, 255, 0.05);
+        border-radius: 30px;
+        border: 2px dashed var(--neon-cyan);
+        animation: pulseBreak 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseBreak {
+        0% { opacity: 0.6; transform: scale(0.98); }
+        50% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0.6; transform: scale(0.98); }
+    }
+
+    /* --- شريط الأخبار السفلي (News Ticker) --- */
+    .news-ticker {
+        height: 60px;
+        background: #000;
+        display: flex;
+        align-items: center;
+        border-top: 2px solid var(--neon-cyan);
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+    }
+
+    .ticker-title {
+        background: var(--neon-cyan);
+        color: #000;
+        padding: 0 25px;
+        font-weight: bold;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        z-index: 5;
+        font-size: 1.2rem;
+    }
+
+    .ticker-content {
+        flex: 1;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    #ticker-text {
+        display: inline-block;
+        padding-right: 100%;
+        animation: tickerLoop 60s linear infinite;
+        font-size: 1.4rem;
+        color: var(--neon-cyan);
+    }
+
+    @keyframes tickerLoop {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(-100%); }
+    }
+</style>
